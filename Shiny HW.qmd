@@ -1,0 +1,422 @@
+---
+title: "Shiny HW"
+author: "Ruijian Maggie Lin"
+date: "2024-11-15"
+format: html
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(shiny)
+```
+
+## 1. Difference between Hadley_1 and Hadley_2
+
+In Mastering Shiny, Hadley Wickham introduces two versions of a basic Shiny app. The first version allows users to select a dataset from the datasets package, then displays summary statistics and the dataset itself. The second version refines this app by organizing the code better, making it more readable and modular. Wickham explains that by showing the same app twice, he demonstrates how to iteratively improve Shiny app development.
+
+## 2. Prepare Chapters 2-4 from Mastering Shiny
+
+#### Section 2.3.5
+
+1.  Which of [`textOutput()`](https://rdrr.io/pkg/shiny/man/textOutput.html) and [`verbatimTextOutput()`](https://rdrr.io/pkg/shiny/man/textOutput.html) should each of the following render functions be paired with?
+
+    `renderPrint(summary(mtcars))`
+
+    verbatimTextOutput("output1")
+
+    `renderText("Good morning!")`
+
+    textOutput("output2")
+
+    `renderPrint(t.test(1:5, 2:6))`
+
+    verbatimTextOutput("output3")
+
+    `renderText(str(lm(mpg ~ wt, data = mtcars)))`
+
+    textOutput("output4")
+
+2.  Re-create the Shiny app from Section 2.3.3, this time setting height to 300px and width to 700px. Set the plot “alt” text so that a visually impaired user can tell that its a scatterplot of five random numbers.
+
+    ```{r}
+    ui <- fluidPage(
+      plotOutput("plot", height = "300px", width = "700px", 
+                 tags$p("Scatterplot of five random numbers"))
+    )
+
+    server <- function(input, output, session) {
+      output$plot <- renderPlot({plot(1:5)}, res = 96)
+    }
+
+    shinyApp(ui, server)
+    ```
+
+3.  Update the options in the call to `renderDataTable()` below so that the data is displayed, but all other controls are suppressed (i.e., remove the search, ordering, and filtering commands). You’ll need to read ?renderDataTable and review the options at [https://datatables.net/reference/option/](#0){.uri}.
+
+```         
+ui <- fluidPage(
+  dataTableOutput("table")
+)
+#> `shiny::dataTableOutput()` is deprecated as of shiny 1.8.1.
+#> Please use `DT::DTOutput()` instead.
+#> See <https://rstudio.github.io/DT/shiny.html> for more information.
+server <- function(input, output, session) {
+  output$table <- renderDataTable(mtcars, options = list(pageLength = 5))
+}
+```
+
+```{r}
+library(DT)
+
+ui <- fluidPage(
+  DTOutput("table")
+)
+
+server <- function(input, output, session) {
+  output$table <- renderDataTable(
+    mtcars,
+    options = list(
+      searching = FALSE,
+      ordering = FALSE,
+      paging = FALSE,
+      info = FALSE
+    )
+  )
+}
+
+shinyApp(ui, server)
+```
+
+4.  Alternatively, read up on [reactable](#0), and convert the above app to use it instead.
+
+```{r}
+library(reactable)
+
+ui <- fluidPage(
+  reactableOutput("table")
+)
+
+server <- function(input, output, session) {
+  output$table <- renderReactable({
+    reactable(
+      mtcars,
+      searchable = FALSE,     # Disable the search box
+      sortable = FALSE,       # Disable column sorting
+      pagination = FALSE,     # Disable pagination
+      showPageSizeOptions = FALSE # Hide page size options
+    )
+  })
+}
+
+shinyApp(ui, server)
+```
+
+#### Section 3.3.6
+
+1.  Given this UI:
+
+    ```         
+    ui <- fluidPage(
+      textInput("name", "What's your name?"),
+      textOutput("greeting")
+    )
+    ```
+
+    Fix the simple errors found in each of the three server functions below. First try spotting the problem just by reading the code; then run the code to make sure you’ve fixed it.
+
+    ```         
+    server1 <- function(input, output, server) {
+      input$greeting <- renderText(paste0("Hello ", name))
+    }
+
+    server2 <- function(input, output, server) {
+      greeting <- paste0("Hello ", input$name)
+      output$greeting <- renderText(greeting)
+    }
+
+    server3 <- function(input, output, server) {
+      output$greting <- paste0("Hello", input$name)
+    }
+    ```
+
+    ```{r}
+    server1 <- function(input, output, session) {
+      output$greeting <- renderText(paste0("Hello ", input$name))
+    }
+
+    server2 <- function(input, output, session) {
+      output$greeting <- renderText({
+        paste0("Hello ", input$name)
+      })
+    }
+
+    server3 <- function(input, output, session) {
+      output$greeting <- renderText(paste0("Hello ", input$name))
+    }
+    ```
+
+2.  Draw the reactive graph for the following server functions:
+
+```         
+  server1 <- function(input, output, session) {
+      c <- reactive(input$a + input$b)
+      e <- reactive(c() + input$d)
+      output$f <- renderText(e())
+    }
+    server2 <- function(input, output, session) {
+      x <- reactive(input$x1 + input$x2 + input$x3)
+      y <- reactive(input$y1 + input$y2)
+      output$z <- renderText(x() / y())
+    }
+    server3 <- function(input, output, session) {
+      d <- reactive(c() ^ input$d)
+      a <- reactive(input$a * 10)
+      c <- reactive(b() / input$c)
+      b <- reactive(a() + input$b)
+    }
+```
+
+```         
+server1:
+  Inputs: input$a, input$b, input$d
+  Reactives: c, e
+  Output: output$f
+    
+  Dependencies:
+    c depends on input$a and input$b.
+    e depends on c and input$d.
+    output$f depends on e.
+  
+  input$a ───┐
+             │
+           ┌─┴─→ c ─→ e ─→ output$f
+           │       │
+  input$b ─┘       │
+                   │
+  input$d ─────────┘
+
+server2:
+  Inputs: input$x1, input$x2, input$x3, input$y1, input$y2
+  Reactives: x, y
+  Output: output$z
+  
+  Dependencies:
+    x depends on input$x1, input$x2, and input$x3.
+    y depends on input$y1 and input$y2.
+    output$z depends on x and y.
+  
+  input$x1 ───┐
+              │
+  input$x2 ───┼──→ x ──┐
+              │        │
+  input$x3 ───┘        │
+                       │
+  input$y1 ───┐        │
+              │        │
+  input$y2 ───┼──→ y ──┘
+              │
+  output$z ───┘
+
+server3:
+  Inputs: input$a, input$b, input$c, input$d
+  Reactives: a, b, c, d
+  Output: None
+  
+  Dependencies:
+    a depends on input$a.
+    b depends on a and input$b.
+    c depends on b and input$c.
+    d depends on c and input$d.
+  
+  input$a ─→ a ─→ b ─→ c ─→ d
+            │     │     │
+  input$b ──┘     │     │
+  input$c ────────┘     │
+  input$d ──────────────┘
+  
+  In server3, there is a circular dependency:
+  d depends on c, which depends on b, which depends on a, which leads back to input$a.
+  However, c also directly depends on b, creating a cycle with d.
+  
+This circular dependency will cause an error in Shiny, as reactive expressions cannot form   loops.
+```
+
+4.  Why will this code fail?
+
+```         
+var <- reactive(df[[input$var]])
+range <- reactive(range(var(), na.rm = TRUE))
+```
+
+Why are `range()` and `var()` bad names for reactive?
+
+-   **Conflict with Base R Functions:** The names range and var are already names of base R functions (range() for calculating the range of values and var() for calculating variance). By using these names for reactives, it overwriting the base R functions within the scope of this code. This can lead to unexpected behavior or errors if R tries to use these names, expecting them to be the base functions rather than the reactive expressions.
+
+-   **Readability and Potential Confusion:** Naming a reactive var() could easily cause confusion for readers of the code, as var is commonly associated with variance. Similarly, range() might imply the calculation of a range but could cause ambiguity if readers expect the base function instead of a reactive variable.
+
+#### Section 4.8
+
+1.  Draw the reactive graph for each app.
+
+    **App 1: ER Injuries Data Analysis**
+
+    **Server 1:**
+
+    -   **Inputs**: input\$age, input\$gender, input\$injury_type
+
+    -   **Reactives**: r_age, r_gender, r_injury
+
+    -   **Output**: output\$summary_table
+
+    **Dependencies**:
+
+    -   `r_age` depends on input\$age.
+
+    -   `r_gender` depends on input\$gender.
+
+    -   `r_injury` depends on input\$injury_type.
+
+    -   `output$summary_table` depends on all reactive values (r_age, r_gender, r_injury).
+
+    ```         
+    input$age ───┐
+                 │
+               ┌─┴─> r_age ─→ output$summary_table
+               │
+    input$gender ─┘
+                 │
+               ┌─┴─> r_gender
+               │
+    input$injury_type ─> r_injury ─┘
+    ```
+
+    **App 2: Injury Location Analysis**
+
+    **Server 2:**
+
+    -   **Inputs**: input\$region, input\$time_period
+
+    -   **Reactives**: r_region, r_time
+
+    -   **Output**: output\$heatmap
+
+    **Dependencies**:
+
+    -   `r_region` depends on input\$region.
+
+    -   `r_time` depends on input\$time_period.
+
+    -   `output$heatmap` depends on both `r_region` and `r_time`.
+
+    ```         
+    input$region ──┐
+                   │
+                 ┌─┴─> r_region ─> output$heatmap
+                 │
+    input$time_period ─> r_time ─┘
+    ```
+
+    **App 3: Trend Analysis**
+
+    **Server 3:**
+
+    -   **Inputs**: input\$year, input\$month
+
+    -   **Reactives**: r_year, r_month
+
+    -   **Output**: output\$trend_plot
+
+    **Dependencies**:
+
+    -   `r_year` depends on input\$year.
+
+    -   `r_month` depends on input\$month.
+
+    -   `output$trend_plot` depends on both `r_year` and `r_month`.
+
+    ```         
+    input$year ───┐
+                  │
+                ┌─┴─> r_year ─> output$trend_plot
+                │
+    input$month ─┘
+                │
+              ┌─┴─> r_month ─┘
+    ```
+
+    **App 4: Demographic Breakdown**
+
+    **Server 4:**
+
+    -   **Inputs**: input\$age_group, input\$income_bracket
+
+    -   **Reactives**: r_age_group, r_income
+
+    -   **Output**: output\$demographic_table
+
+    **Dependencies**:
+
+    -   `r_age_group` depends on input\$age_group.
+
+    -   `r_income` depends on input\$income_bracket.
+
+    -   `output$demographic_table` depends on both `r_age_group` and `r_income`.
+
+    ```         
+    input$age_group ─┐
+                     │
+                   ┌─┴─> r_age_group ─> output$demographic_table
+                   │
+    input$income_bracket ─> r_income ─┘
+    ```
+
+2.  What happens if you flip [`fct_infreq()`](https://forcats.tidyverse.org/reference/fct_inorder.html) and [`fct_lump()`](https://forcats.tidyverse.org/reference/fct_lump.html) in the code that reduces the summary tables?
+
+    Reversing these functions changes how factor levels are grouped and ordered. Using fct_lump() first lumps rare levels, then fct_infreq() orders levels by frequency within each grouping. Switching them would first order by frequency, potentially creating unintended groupings.
+
+3.  Add an input control that lets the user decide how many rows to show in the summary tables.
+
+    Add a numeric input (e.g., numericInput()) allowing the user to set the number of rows in the table output, dynamically adjusting the table size based on this input.
+
+4.  Provide a way to step through every narrative systematically with forward and backward buttons.
+
+    Advanced: Make the list of narratives “circular” so that advancing forward from the last narrative takes you to the first.
+
+    Implement forward and backward buttons to navigate through narratives. For a circular list, use modulo arithmetic ((current_index + 1) %% length(narratives)) to loop back after reaching the end.
+
+## 3. Build my first Shiny application
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Dataset Viewer"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("dataset", "Choose a dataset:", 
+                  choices = c("iris", "mtcars"))
+    ),
+    mainPanel(
+      verbatimTextOutput("summary"),
+      tableOutput("view")
+    )
+  )
+)
+
+server <- function(input, output) {
+  datasetInput <- reactive({
+    get(input$dataset, 'package:datasets')
+  })
+  
+  output$summary <- renderPrint({
+    summary(datasetInput())
+  })
+  
+  output$view <- renderTable({
+    datasetInput()
+  })
+}
+
+shinyApp(ui, server)
+```
